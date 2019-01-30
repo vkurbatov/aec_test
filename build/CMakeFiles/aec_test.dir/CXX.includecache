@@ -1,0 +1,32 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/vkurbatov/ivcscodec/aec_test/alsa_device.cpp
+alsa_device.h
+/home/vkurbatov/ivcscodec/aec_test/alsa_device.h
+cstring
+-
+algorithm
+-
+alsa/asoundlib.h
+-
+
+/home/vkurbatov/ivcscodec/aec_test/alsa_device.h
+string
+-
+vector
+-
+memory
+-
+
+/home/vkurbatov/ivcscodec/aec_test/main.cpp
+iostream
+-
+alsa_device.h
+/home/vkurbatov/ivcscodec/aec_test/alsa_device.h
+
