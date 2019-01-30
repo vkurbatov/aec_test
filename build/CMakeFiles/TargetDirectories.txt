@@ -1,3 +1,0 @@
-/home/vkurbatov/ivcscodec/aec_test/build/CMakeFiles/rebuild_cache.dir
-/home/vkurbatov/ivcscodec/aec_test/build/CMakeFiles/aec_test.dir
-/home/vkurbatov/ivcscodec/aec_test/build/CMakeFiles/edit_cache.dir

@@ -1,1 +1,0 @@
-/usr/bin/clang++  -std=c++11 -O0 -ggdb3  -g  -rdynamic CMakeFiles/aec_test.dir/main.cpp.o CMakeFiles/aec_test.dir/alsa_device.cpp.o  -o aec_test -lwebrtc_audio_processing -lasound 
