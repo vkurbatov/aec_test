@@ -32,9 +32,35 @@ static std::string get_field_from_hint(const void* hint, const char* field_name)
 	return std::move(result);
 }
 
+snd_pcm_format_t bits_to_snd_format(std::uint32_t bits)
+{
+    snd_pcm_format_t result = SND_PCM_FORMAT_UNKNOWN;
+
+    switch(bits)
+    {
+        case 8:
+            result = SND_PCM_FORMAT_U8;
+        break;
+        case 16:
+            result = SND_PCM_FORMAT_U16;
+        break;
+        case 24:
+            result = SND_PCM_FORMAT_U24;
+        break;
+        case 32:
+            result = SND_PCM_FORMAT_U32;
+    }
+
+    return result;
+}
+
 AlsaDevice::AlsaDevice(const std::string& hw_profile)
 		: m_handle(nullptr)
 		, m_hw_profile(hw_profile.empty() ? default_hw_profile : hw_profile)
+        , m_is_recorder(false)
+        , m_nonblock_mode(false)
+        , m_device_name("default")
+        , m_buffer_size(0)
 {
 
 }
@@ -50,7 +76,7 @@ const AlsaDevice::device_names_list_t AlsaDevice::GetDeviceInfo(const std::strin
 
 	device_names_list_t device_list;
 
-	auto result = snd_device_name_hint(-1, "pcm", (void ***)&hints);
+    auto result = snd_device_name_hint(-1, "pcm", (void ***)&hints);
 
 	if (result >=  0)
 	{
@@ -76,7 +102,6 @@ const AlsaDevice::device_names_list_t AlsaDevice::GetDeviceInfo(const std::strin
 
 					if (!field_value.empty() || field_id == fields_enum_t::ioid)
 					{
-
 						switch(field_id)
 						{
 							case fields_enum_t::name:
@@ -136,22 +161,131 @@ const AlsaDevice::device_names_list_t AlsaDevice::GetDeviceInfo(const std::strin
 		snd_device_name_free_hint((void**)hints);
 	}
 
-	return std::move(device_list);
+    return std::move(device_list);
+}
+
+bool AlsaDevice::Open(const std::string &device_name, bool recorder, const audio_format_t &audio_format, std::uint32_t buffer_size)
+{
+    bool result = false;
+
+    if ( IsOpen() )
+    {
+        Close();
+    }
+
+    auto err = snd_pcm_open(&m_handle
+                                 , device_name.c_str()
+                                 , recorder ? SND_PCM_STREAM_PLAYBACK : SND_PCM_STREAM_CAPTURE
+                                 , SND_PCM_NONBLOCK);
+
+    if (err > 0)
+    {
+        m_device_name = device_name;
+        m_audio_format = audio_format;
+        m_is_recorder = recorder;
+
+        // Set
+    }
+
+    return result;
+}
+
+bool AlsaDevice::Close()
+{
+    bool result = false;
+
+    return result;
 }
 
 bool AlsaDevice::IsOpen() const
 {
-	return m_handle != nullptr;
+    return m_handle != nullptr;
+}
+
+bool AlsaDevice::IsRecorder() const
+{
+    return m_is_recorder;
+}
+
+const audio_format_t &AlsaDevice::GetAudioFormat() const
+{
+    return m_audio_format;
+}
+
+bool AlsaDevice::SetAudioFormat(const audio_format_t &audio_format)
+{
+    bool result = false;
+
+    if (IsOpen())
+    {
+
+    }
+
+    return true;
+}
+
+const uint32_t AlsaDevice::GetBufferSize() const
+{
+        return m_audio_format;
+}
+
+bool AlsaDevice::SetBufferSize(const uint32_t &buffer_size)
+{
+
 }
 
 const AlsaDevice::device_names_list_t AlsaDevice::GetPlaybackDeviceInfo()
 {
-	return getDeviceInfoByDirection(false);
+    return std::move(getDeviceInfoByDirection(false));
 }
 
 const AlsaDevice::device_names_list_t AlsaDevice::GetRecorderDeviceInfo()
 {
-	return getDeviceInfoByDirection(true);
+    return std::move(getDeviceInfoByDirection(true));
+}
+
+bool AlsaDevice::setHardwareParams()
+{
+    bool result = false;
+
+    snd_pcm_hw_params_t *hw_params = nullptr;
+    snd_pcm_hw_params_alloca(&hw_params);
+
+    if (hw_params != nullptr)
+    {
+        auto err = snd_pcm_hw_params_any(m_handle, hw_params);
+
+        if (err >= 0)
+        {
+            err = snd_pcm_hw_params_set_access(m_handle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED);
+            if (err >= 0)
+            {
+                err = snd_pcm_hw_params_set_format(m_handle, hw_params, bits_to_snd_format(m_audio_format.bit_per_sample));
+                if (err >= 0)
+                {
+                    err = snd_pcm_hw_params_set_channels(m_handle, hw_params, bits_to_snd_format(m_audio_format.channels));
+                    if (err >= 0)
+                    {
+                        err = snd_pcm_hw_params_set_rate_near(m_handle, hw_params, &m_audio_format.sample_rate, nullptr);
+                        if(err >= 0)
+                        {
+                            snd_pcm_uframes_t desired_period_size = (m_buffer_size * 8) / m_audio_format.bit_per_sample;
+                            err = snd_pcm_hw_params_set_period_size_near(m_handle, hw_params, &desired_period_size, nullptr);
+
+
+                        }
+                    }
+                }
+            }
+
+        }
+
+
+
+        snd_pcm_hw_params_free(hw_params);
+    }
+
+    return result;
 }
 
 const AlsaDevice::device_names_list_t AlsaDevice::getDeviceInfoByDirection(bool input)

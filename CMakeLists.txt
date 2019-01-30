@@ -14,14 +14,23 @@ project(${TARGET})
 set(WEBRTCAP_INC_DIR "/usr/include/webrtc_audio_processing/webrtc/")
 set(WEBRTCAP_INC_ALSA "/usr/include/alsa/")
 
+set(SOURCES
+    "main.cpp"
+    "alsa_device.cpp"
+    )
+
+set(HEADERS
+    "alsa_device.h"
+    )
+
 include_directories(
                     ${WEBRTCAP_INC_DIR}
                     )
 
 
 add_executable(${TARGET}
-                "main.cpp"
-                "alsa_device.cpp"
+               ${SOURCES}
+               ${HEADERS}
                 )
 
 target_link_libraries(${TARGET}
