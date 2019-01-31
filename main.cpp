@@ -36,8 +36,8 @@ int main()
 
 	audio_devices::AlsaDevice recorder, player;
 
-	audio_devices::audio_params_t player_params(false, { 44100, 16, 1 }, 441 * 8,true);
-	audio_devices::audio_params_t recorder_params(true, { 44100, 16, 1 }, 441 * 8, false);
+    audio_devices::audio_params_t player_params(false, { 44100, 16, 1 }, 441 * 6,true);
+    audio_devices::audio_params_t recorder_params(true, { 44100, 16, 1 }, 441 * 6, false);
 
 	player.Open("default", player_params);
 	recorder.Open("default", recorder_params);
