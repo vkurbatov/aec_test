@@ -11,16 +11,18 @@ set(TARGET aec_test)
 
 project(${TARGET})
 
-set(WEBRTCAP_INC_DIR "/usr/include/webrtc_audio_processing/webrtc/")
+set(WEBRTCAP_INC_DIR "/usr/include/webrtc_audio_processing/")
 set(WEBRTCAP_INC_ALSA "/usr/include/alsa/")
 
 set(SOURCES
     "main.cpp"
     "alsa_device.cpp"
+    "aec_controller.cpp"
     )
 
 set(HEADERS
     "alsa_device.h"
+    "aec_controller.h"
     )
 
 include_directories(

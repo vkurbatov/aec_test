@@ -1,10 +1,13 @@
 #include <iostream>
+#include <thread>
 #include "alsa_device.h"
 
 int main()
 {
 
     int i = 0;
+
+	/*
 
 	audio_devices::AlsaDevice audio_device;
 
@@ -27,6 +30,30 @@ int main()
 	{
 		std::cout << "#" << i << ": " << info.name << ", " << info.description << std::endl;;
 		i++;
+	}
+
+	*/
+
+	audio_devices::AlsaDevice recorder, player;
+
+	audio_devices::audio_params_t player_params(false, { 44100, 16, 1 }, 441 * 8,true);
+	audio_devices::audio_params_t recorder_params(true, { 44100, 16, 1 }, 441 * 8, false);
+
+	player.Open("default", player_params);
+	recorder.Open("default", recorder_params);
+
+	while (true)
+	{
+		char buffer[441*2];
+
+		auto ret = recorder.Read(buffer, sizeof(buffer));
+		if (ret > 0)
+		{
+			player.Write(buffer, ret);
+		}
+
+		// std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
 	}
 
     return 0;
