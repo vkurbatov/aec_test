@@ -9,11 +9,15 @@ extern "C"
 
 #include <cstring>
 #include <algorithm>
+
+#ifndef LOG_END
+
 #include <iostream>
 
 #define LOG(a)	std::cout << "[" << #a << "] "
-
 #define LOG_END << std::endl;
+
+#endif
 
 const char* device_info_fields[] = {"NAME", "DESC",  "IOID" };
 const char default_hw_profile[] = "plughw:";

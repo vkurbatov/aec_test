@@ -8,7 +8,7 @@ namespace webrtc
 {
 class AudioProcessing;
 class StreamConfig;
-class ProcessingConfig;
+// class ProcessingConfig;
 }
 #endif
 
@@ -18,20 +18,23 @@ namespace audio_processing
 class AecController
 {
     std::unique_ptr<webrtc::AudioProcessing>    m_audio_processing;
-    std::unique_ptr<webrtc::ProcessingConfig>   m_processing_config;
+    std::unique_ptr<webrtc::StreamConfig>       m_stream_config;
 
     std::uint32_t                               m_sample_rate;
     std::uint32_t                               m_bit_per_sample;
     std::uint32_t                               m_channels;
+    std::uint32_t                               m_step_size;
 
 public:
     AecController(std::uint32_t sample_rate, std::uint32_t bit_per_sample, std::uint32_t channels);
     ~AecController();
 
+
 private:
-    void init(std::uint32_t sample_rate, std::uint32_t bit_per_sample, std::uint32_t channels);
-    void internalPlayback(const void* speaker_data, std::size_t speaker_size);
-    void internalCapture(void* capture_data, std::size_t capture_size);
+    webrtc::AudioProcessing* getAudioProcessor();
+    bool init(std::uint32_t sample_rate, std::uint32_t bit_per_sample, std::uint32_t channels);
+    bool internalPlayback(const void* speaker_data, std::size_t speaker_data_size);
+    bool internalCapture(void* capture_data, std::size_t capture_data_size);
 };
 
 }
