@@ -53,14 +53,19 @@ int main()
         while (true)
         {
             char buffer[882];
-            char buffer2[sizeof(buffer)];
+            std::int16_t buffer2[sizeof(buffer) / sizeof(std::int16_t)];
 
-            std::memset(buffer2, 0, sizeof(buffer2));
+            for (auto& c : buffer2)
+            {
+                c = 0;// -32768;
+            }
+
+            // std::memset(buffer2, -32768, sizeof(buffer2));
 
             auto ret = recorder.Read(buffer, sizeof(buffer));
 
-           // aec_controller.Playback(buffer, sizeof(buffer));
-           // aec_controller.Capture(buffer, sizeof(buffer));
+            //aec_controller.Playback(buffer2, sizeof(buffer));
+             aec_controller.Capture(buffer, sizeof(buffer));
 
             if (ret > 0)
             {

@@ -186,8 +186,9 @@ bool AecController::internalReset()
 
             m_audio_processing->voice_detection()->Enable(false);
 
-            m_audio_processing->echo_cancellation()->enable_drift_compensation(true);
-            m_audio_processing->echo_cancellation()->Enable(false);
+            //m_audio_processing->echo_cancellation()->set_stream_drift_samples(441);
+            m_audio_processing->echo_cancellation()->enable_drift_compensation(false);
+            m_audio_processing->echo_cancellation()->Enable(true);
 
             LOG(info) << "Webrtc audio processor initialize success " LOG_END;
         }
@@ -216,7 +217,11 @@ bool AecController::internalPlayback(const void *speaker_data, std::size_t speak
 
             auto samples = float_buffer.data();
 
-            auto webrtc_status = apm->ProcessReverseStream(&samples, *m_stream_config, *m_stream_config, &samples);
+            auto webrtc_status = apm->AnalyzeReverseStream(&samples, m_step_size / 2, m_sample_rate, webrtc::AudioProcessing::ChannelLayout::kMono);
+
+            //auto webrtc_status = apm->ProcessReverseStream(&samples, *m_stream_config, *m_stream_config, &samples);
+
+            // auto webrtc_status = webrtc::AudioProcessing::kNoError;
 
             result = webrtc_status == webrtc::AudioProcessing::kNoError;
 
@@ -253,6 +258,7 @@ bool AecController::internalCapture(void *capture_data, std::size_t capture_data
 
         std::vector<float> float_buffer((m_step_size * 8) / m_bit_per_sample);
 
+
         while(capture_data_size >= m_step_size)
         {
             converters::pcm_to_float(capturt_ptr, m_step_size, float_buffer.data(), m_bit_per_sample);
@@ -262,6 +268,8 @@ bool AecController::internalCapture(void *capture_data, std::size_t capture_data
             apm->set_stream_delay_ms(0);
 
             auto webrtc_status = apm->ProcessStream(&samples, *m_stream_config, *m_stream_config, &samples);
+
+            // auto webrtc_status = webrtc::AudioProcessing::kNoError;
 
             result = webrtc_status == webrtc::AudioProcessing::kNoError;
 
