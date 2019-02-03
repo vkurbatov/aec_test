@@ -48,11 +48,13 @@ int main()
 	recorder.Open("default", recorder_params);
 
 
+    auto begin = std::chrono::high_resolution_clock::now();
+
     if (aec_controller.Reset())
     {
         while (true)
         {
-            char buffer[882];
+            char buffer[441 * 2];
             std::int16_t buffer2[sizeof(buffer) / sizeof(std::int16_t)];
 
             for (auto& c : buffer2)
@@ -62,17 +64,29 @@ int main()
 
             // std::memset(buffer2, -32768, sizeof(buffer2));
 
+            auto t_1 = std::chrono::high_resolution_clock::now();
+
             auto ret = recorder.Read(buffer, sizeof(buffer));
 
-            //aec_controller.Playback(buffer2, sizeof(buffer));
-             aec_controller.Capture(buffer, sizeof(buffer));
+
+            begin += std::chrono::milliseconds(10);
+
+            std::this_thread::sleep_for(begin - std::chrono::high_resolution_clock::now());
+
+            // aec_controller.Playback(buffer2, sizeof(buffer));
+            // aec_controller.Capture(buffer, sizeof(buffer));
+
+            auto t_2 = std::chrono::high_resolution_clock::now();
 
             if (ret > 0)
             {
                 player.Write(buffer, ret);
             }
 
-            // std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            auto dl_1 = std::chrono::duration_cast<std::chrono::milliseconds>(t_2 - t_1).count();
+            auto dl_2 = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - t_2).count();
+
+            // std::cout << "Read time = " << dl_1 << ", write time = " << dl_2 << std::endl;
 
         }
     }

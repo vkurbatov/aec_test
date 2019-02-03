@@ -22,8 +22,12 @@ extern "C"
 const char* device_info_fields[] = {"NAME", "DESC",  "IOID" };
 const char default_hw_profile[] = "plughw:";
 const char default_device_name[] = "default";
+const std::int32_t default_max_io_retry_count = 5;
 
 namespace audio_devices
+{
+
+namespace alsa_utils
 {
 
 static std::string get_field_from_hint(const void* hint, const char* field_name)
@@ -68,6 +72,8 @@ snd_pcm_format_t bits_to_snd_format(std::uint32_t bits)
     return result;
 }
 
+}
+
 AlsaDevice::AlsaDevice(const std::string& hw_profile)
 		: m_handle(nullptr)
 		, m_hw_profile(hw_profile.empty() ? default_hw_profile : hw_profile)
@@ -105,7 +111,7 @@ const AlsaDevice::device_names_list_t AlsaDevice::GetDeviceInfo(const std::strin
 
 			for (const auto f : device_info_fields)
 			{
-				auto field_value = get_field_from_hint(*it, f);
+                auto field_value = alsa_utils::get_field_from_hint(*it, f);
 
 				if ( field_value != "null" )
 				{
@@ -329,7 +335,7 @@ std::int32_t AlsaDevice::setHardwareParams(const audio_params_t& audio_params)
 					break;
 				}
 
-				result = snd_pcm_hw_params_set_format(m_handle, hw_params, bits_to_snd_format(audio_params.audio_format.bit_per_sample));
+                result = snd_pcm_hw_params_set_format(m_handle, hw_params, alsa_utils::bits_to_snd_format(audio_params.audio_format.bit_per_sample));
 				if (result < 0)
 				{
 					LOG(error) << "Can't set format S" << audio_params.audio_format.bit_per_sample << " hardware params, errno = " << result LOG_END;
@@ -423,36 +429,87 @@ std::uint32_t AlsaDevice::updateDictionary(const std::string& hw_profile)
 	return m_dictionary_devices.size();
 }
 
+
+
 std::int32_t AlsaDevice::internalRead(void *capture_data, std::size_t size)
 {
 	std::int32_t result = -1, total = 0;
 
 	auto data = static_cast<std::int8_t*>(capture_data);
 
-	auto frame_bytes = m_audio_params.audio_format.frames_bytes();
+    auto frame_bytes = m_audio_params.audio_format.frames_octets();
 
-	std::int32_t err;
+    std::int32_t retry_read_count = 0;
+    bool io_complete = false;
+
 	do
 	{
-		err = snd_pcm_readi(m_handle, data, size / frame_bytes);
+        // в начале каждого цикла априори снимаем признак завершения и
+        // инкрементируем счетчик попыток ввода-вывода. Он все равно
+        // сбросится при успешной операции ввода-вывода
 
-		if (err > 0)
-		{
-			size -= err * frame_bytes;
-			data += err * frame_bytes;
-			total += err * frame_bytes;
-		}
+        io_complete = false;
+        retry_read_count++;
+
+        auto err = snd_pcm_readi(m_handle, data, size / frame_bytes);
+
+        switch(err)
+        {
+            case -EPIPE:
+                snd_pcm_prepare(m_handle);
+            break;
+
+            case -ESTRPIPE:
+            case -EAGAIN:
+
+                // сюда попадаем если устройство не готово, snd_pcm_wait вернет 1,
+                // если устройство освободилось за заданный таймаут в мсек
+
+                if ( snd_pcm_wait( m_handle, m_audio_params.audio_format.duration_ms(size) ) != 1 )
+                {
+                    io_complete = true;
+                }
+
+            break;
+
+            default:
+            {
+                if (err > 0)
+                {
+                    size -= err * frame_bytes;
+                    data += err * frame_bytes;
+                    total += err * frame_bytes;
+
+                    retry_read_count = 0;
+                }
+                else
+                {
+                    // оставшиеся ошибки считаем фатальными
+
+                    io_complete = true;
+                }
+            }
+        }
+
+        if (err < 0)
+        {
+            LOG(error) << "Can't read alsa device with error = " << err << ", retry = " << retry_read_count LOG_END;
+        }
+
+        if (io_complete |= (size == 0) || (retry_read_count >= default_max_io_retry_count))
+        {
+            result = err <= 0 ? err : total;
+        }
 	}
-	while((err == -EAGAIN || err > 0) && (size > 0));
+    while(!io_complete);
 
-	if (err >= 0)
+    if (result >= 0)
 	{
-		result = total;
 		// LOG(debug) << "Read " << total << " bytes from device success" LOG_END;
 	}
 	else
 	{
-		LOG(error) << "Faile read from device, errno = " << err LOG_END;
+        LOG(error) << "Faile read from device, errno = " << result LOG_END;
 	}
 	return result;
 }
@@ -463,50 +520,88 @@ std::int32_t AlsaDevice::internalWrite(const void *playback_data, std::size_t si
 
 	auto data = static_cast<const std::int8_t*>(playback_data);
 
-	auto frame_bytes = m_audio_params.audio_format.frames_bytes();
+    auto frame_bytes = m_audio_params.audio_format.frames_octets();
 
-	std::int32_t err;
-	bool work;
+    static auto trans_id = 0;
 
-	do
-	{
-		work = false;
-		err = snd_pcm_writei(m_handle, data, size / frame_bytes);
+    std::int32_t retry_write_count = 0;
+    bool io_complete = false;
 
-		if (err > 0)
-		{
-			size -= err * frame_bytes;
-			data += err * frame_bytes;
-			total += err * frame_bytes;
+    do
+    {
+        // в начале каждого цикла априори снимаем признак завершения и
+        // инкрементируем счетчик попыток ввода-вывода. Он все равно
+        // сбросится при успешной операции ввода-вывода
 
-			work = size > 0;
-		}
-		else
-		{
-			switch(err)
-			{
-				case -EPIPE:
-					snd_pcm_prepare(m_handle);
-				case -EAGAIN:
-					work = true;
-					break;
-				case -ESTRPIPE:
-					while (snd_pcm_resume(m_handle) == -EAGAIN);
-					break;
-			}
-		}
-	}
-	while(work);
+        io_complete = false;
+        retry_write_count++;
 
-	if (err >= 0)
-	{
-		result = total;
-		// LOG(debug) << "Write " << total << " bytes to device success " LOG_END;
-	}
-	else
-	{
-		LOG(error) << "Failed write to device, errno = " << err LOG_END;
-	}
+        auto err = snd_pcm_writei(m_handle, data, size / frame_bytes);
+
+        switch(err)
+        {
+            case -EPIPE:
+                snd_pcm_prepare(m_handle);
+            break;
+
+            case -ESTRPIPE:
+            case -EAGAIN:
+
+                // сюда попадаем если устройство не готово, snd_pcm_wait вернет 1,
+                // если устройство освободилось за заданный таймаут в мсек
+
+                if ( snd_pcm_wait( m_handle, m_audio_params.audio_format.duration_ms(size) ) != 1 )
+                {
+                    io_complete = true;
+                }
+                else
+                {
+                    snd_pcm_prepare(m_handle);
+                }
+
+            break;
+
+            default:
+            {
+                if (err > 0)
+                {
+                    size -= err * frame_bytes;
+                    data += err * frame_bytes;
+                    total += err * frame_bytes;
+
+                    retry_write_count = 0;
+                }
+                else
+                {
+                    // оставшиеся ошибки считаем фатальными
+
+                    io_complete = true;
+                }
+            }
+        }
+
+        if (err < 0)
+        {
+            LOG(error) << "Can't write alsa device with error = " << err << ", retry = " << retry_write_count << ", id = " << trans_id LOG_END;
+        }
+
+        if (io_complete |= (size == 0) || (retry_write_count >= default_max_io_retry_count))
+        {
+            result = err <= 0 ? err : total;
+        }
+    }
+    while(!io_complete);
+
+    if (result >= 0)
+    {
+        // LOG(debug) << "Write " << total << " bytes from device success" LOG_END;
+    }
+    else
+    {
+        LOG(error) << "Faile write to device, errno = " << result LOG_END;
+    }
+
+    trans_id++;
 
 	return result;
 }

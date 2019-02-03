@@ -25,7 +25,10 @@ struct audio_format_t
     {}
 
 	inline bool is_init() const { return sample_rate >= 8000 && bit_per_sample > 7 && channels > 0; }
-	inline std::uint32_t frames_bytes() const { return (bit_per_sample * channels) / 8; }
+    inline std::uint32_t frames_octets() const { return (bit_per_sample * channels) / 8; }
+    inline std::uint32_t bytes_per_second() const { return (sample_rate * bit_per_sample * channels) / 8; }
+    inline std::uint32_t duration_ms(std::size_t size) const { return (size * 1000) / bytes_per_second(); }
+    inline std::size_t octets_count(std::uint32_t duration_ms) const { return (duration_ms * bytes_per_second()) / 1000; }
 };
 
 static const audio_format_t default_audio_format = { 44100, 16, 1 };
