@@ -62,9 +62,6 @@ snd_pcm_format_t bits_to_snd_format(std::uint32_t bits)
         case 16:
 			result = SND_PCM_FORMAT_S16_LE;
         break;
-        case 24:
-			result = SND_PCM_FORMAT_S24_LE;
-        break;
         case 32:
 			result = SND_PCM_FORMAT_S32_LE;
     }
@@ -72,12 +69,44 @@ snd_pcm_format_t bits_to_snd_format(std::uint32_t bits)
     return result;
 }
 
+template<typename Tval>
+void change_volume(const void *sound_data, std::size_t size, void *output_data, std::uint32_t volume)
+{
+    volume = std::min(100u, std::max(0u, volume));
+
+    for (int i = 0; i < size / sizeof(Tval); i++)
+    {
+
+        auto& input_sample = *(static_cast<const Tval*>(sound_data) + i);
+        auto& output_sample = *(static_cast<Tval*>(output_data) + i);
+
+        output_sample = static_cast<Tval>((static_cast<double>(input_sample) * static_cast<double>(volume)) / 100.0f);
+
+    }
+}
+
+void change_volume(const void *sound_data, std::size_t size, void* output_data, std::uint32_t bit_per_sample, std::uint32_t volume)
+{
+    switch(bit_per_sample)
+    {
+        case 8:
+            change_volume<std::int8_t>(sound_data, size, output_data, volume);
+        break;
+        case 16:
+            change_volume<std::int16_t>(sound_data, size, output_data, volume);
+        break;
+        case 32:
+            change_volume<std::int32_t>(sound_data, size, output_data, volume);
+        break;
+    }
+}
 }
 
 AlsaDevice::AlsaDevice(const std::string& hw_profile)
 		: m_handle(nullptr)
 		, m_hw_profile(hw_profile.empty() ? default_hw_profile : hw_profile)
         , m_device_name("default")
+        , m_volume(100)
 {
 
 }
@@ -279,7 +308,12 @@ std::int32_t AlsaDevice::Read(void *capture_data, std::size_t size)
 
 	if ( IsOpen() )
 	{
-		result = internalRead(capture_data, size);
+        result = -EACCES;
+
+        if (IsRecorder())
+        {
+            result = internalRead(capture_data, size);
+        }
 	}
 
 	return result;
@@ -291,7 +325,12 @@ std::int32_t AlsaDevice::Write(const void *playback_data, std::size_t size)
 
 	if ( IsOpen() )
 	{
-		result = internalWrite(playback_data, size);
+        result = -EACCES;
+
+        if (!IsRecorder())
+        {
+            result = internalWrite(playback_data, size);
+        }
 	}
 
 	return result;
@@ -440,7 +479,7 @@ std::int32_t AlsaDevice::internalRead(void *capture_data, std::size_t size)
     auto frame_bytes = m_audio_params.audio_format.frames_octets();
 
     std::int32_t retry_read_count = 0;
-    bool io_complete = false;
+    bool io_complete = false;    
 
 	do
 	{
@@ -505,6 +544,7 @@ std::int32_t AlsaDevice::internalRead(void *capture_data, std::size_t size)
 
     if (result >= 0)
 	{
+        alsa_utils::change_volume(capture_data, size, capture_data, m_audio_params.audio_format.bit_per_sample, m_volume);
 		// LOG(debug) << "Read " << total << " bytes from device success" LOG_END;
 	}
 	else
@@ -518,14 +558,18 @@ std::int32_t AlsaDevice::internalWrite(const void *playback_data, std::size_t si
 {
 	std::int32_t result = 0, total = 0;
 
-	auto data = static_cast<const std::int8_t*>(playback_data);
-
     auto frame_bytes = m_audio_params.audio_format.frames_octets();
 
     static auto trans_id = 0;
 
     std::int32_t retry_write_count = 0;
     bool io_complete = false;
+
+    m_sample_buffer.resize(size);
+
+    alsa_utils::change_volume(playback_data, size, m_sample_buffer.data(), m_audio_params.audio_format.bit_per_sample, m_volume);
+
+    auto data = m_sample_buffer.data();
 
     do
     {
@@ -553,10 +597,6 @@ std::int32_t AlsaDevice::internalWrite(const void *playback_data, std::size_t si
                 if ( snd_pcm_wait( m_handle, m_audio_params.audio_format.duration_ms(size) ) != 1 )
                 {
                     io_complete = true;
-                }
-                else
-                {
-                    snd_pcm_prepare(m_handle);
                 }
 
             break;
@@ -604,30 +644,6 @@ std::int32_t AlsaDevice::internalWrite(const void *playback_data, std::size_t si
     trans_id++;
 
     return result;
-}
-
-std::int32_t AlsaDevice::internalVolume(int32_t volume)
-{
-    bool is_set = volume >= 0;
-
-    snd_mixer_t *mixer_handle;
-    snd_mixer_selem_id_t *selem_id;
-
-    const char* selem_name = m_audio_params.recorder ? "Mic" : "Master";
-
-    snd_mixer_open(&mixer_handle, 0);
-    snd_mixer_attach(mixer_handle, m_device_name.c_str());
-    snd_mixer_selem_register(mixer_handle, NULL, NULL);
-    snd_mixer_load(mixer_handle);
-
-    snd_mixer_selem_id_alloca(&selem_id);
-    snd_mixer_selem_id_set_index(selem_id, 0);
-    snd_mixer_selem_id_set_name(selem_id, selem_name);
-
-    auto elem = snd_mixer_find_selem(mixer_handle, selem_id);
-
-
-
 }
 
 }

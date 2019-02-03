@@ -39,13 +39,15 @@ int main()
 
 	audio_devices::AlsaDevice recorder, player;
 
-    audio_devices::audio_params_t player_params(false, { 44100, 16, 1 }, 441 * 6, true);
-    audio_devices::audio_params_t recorder_params(true, { 44100, 16, 1 }, 441 * 6, false);
+    audio_devices::audio_params_t player_params(false, { 44100, 16, 1 }, 441 * 2, true);
+    audio_devices::audio_params_t recorder_params(true, { 44100, 16, 1 }, 441 * 2, false);
 
     audio_processing::AecController aec_controller(44100, 16, 1);
 
 	player.Open("default", player_params);
+    player.SetVolume(100);
 	recorder.Open("default", recorder_params);
+    recorder.SetVolume(100);
 
 
     auto begin = std::chrono::high_resolution_clock::now();
@@ -68,11 +70,6 @@ int main()
 
             auto ret = recorder.Read(buffer, sizeof(buffer));
 
-
-            begin += std::chrono::milliseconds(10);
-
-            std::this_thread::sleep_for(begin - std::chrono::high_resolution_clock::now());
-
             // aec_controller.Playback(buffer2, sizeof(buffer));
             // aec_controller.Capture(buffer, sizeof(buffer));
 
@@ -82,6 +79,11 @@ int main()
             {
                 player.Write(buffer, ret);
             }
+
+            begin += std::chrono::milliseconds(10);
+
+            std::this_thread::sleep_for(begin - std::chrono::high_resolution_clock::now());
+
 
             auto dl_1 = std::chrono::duration_cast<std::chrono::milliseconds>(t_2 - t_1).count();
             auto dl_2 = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - t_2).count();

@@ -69,6 +69,7 @@ class AlsaDevice
 public:
 
     using device_names_list_t = std::vector<audio_device_info>;
+    using sample_buffer_t = std::vector<std::uint8_t>;
 
 private:
 
@@ -80,6 +81,11 @@ private:
     device_names_list_t             m_dictionary_devices;
 
 	audio_params_t					m_audio_params;
+
+    std::uint32_t                   m_volume;
+
+    sample_buffer_t                 m_sample_buffer;
+
 
 public:
 
@@ -100,6 +106,9 @@ public:
 	std::int32_t Read(void* capture_data, std::size_t size);
 	std::int32_t Write(const void* playback_data, std::size_t size);
 
+    inline void SetVolume(std::uint32_t volume) { m_volume = volume; }
+    inline std::uint32_t GetVolume() const { return m_volume; }
+
     const device_names_list_t GetPlaybackDeviceInfo();
     const device_names_list_t GetRecorderDeviceInfo();
 
@@ -113,8 +122,6 @@ private:
 
 	std::int32_t internalRead(void* capture_data, std::size_t size);
 	std::int32_t internalWrite(const void* playback_data, std::size_t size);
-
-    std::int32_t internalVolume(std::int32_t volume = -1);
 
 };
 
