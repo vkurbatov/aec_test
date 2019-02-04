@@ -47,7 +47,7 @@ int main()
     audio_devices::audio_params_t player_params(false, { sample_rate, 16, 1 }, frame_size * 6, true);
     audio_devices::audio_params_t recorder_params(true, { sample_rate, 16, 1 }, frame_size * 1 + 40, false);
 
-    audio_processing::AecController aec_controller(sample_rate, 16, 1);
+    audio_processing::AudioProcessor aec_controller(sample_rate, 16, 1);
 
 	player.Open("default", player_params);
 	recorder.Open("default", recorder_params);
@@ -66,6 +66,10 @@ int main()
         std::memset(empty_buffer, 0, sizeof(empty_buffer));
 
         std::memset(buffers, 0, sizeof(buffers));
+
+        aec_controller.SetHighPassFilter(true);
+        aec_controller.SetGainControl(true, 0);
+        aec_controller.SetEchoCancellation(true, 2);
 
         while (true)
         {

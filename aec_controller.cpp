@@ -94,7 +94,7 @@ void webrtc_deletor(T* webrtc_obj)
     }
 }
 
-AecController::AecController(std::uint32_t sample_rate, std::uint32_t bit_per_sample, std::uint32_t channels)
+AudioProcessor::AudioProcessor(std::uint32_t sample_rate, std::uint32_t bit_per_sample, std::uint32_t channels)
     : m_audio_processing(nullptr, webrtc_deletor<webrtc::AudioProcessing> )
     , m_stream_config(nullptr, webrtc_deletor<webrtc::StreamConfig> )
 {
@@ -104,12 +104,12 @@ AecController::AecController(std::uint32_t sample_rate, std::uint32_t bit_per_sa
 }
 
 
-bool AecController::Playback(const void *speaker_data, std::size_t speaker_data_size)
+bool AudioProcessor::Playback(const void *speaker_data, std::size_t speaker_data_size)
 {
     return internalPlayback(speaker_data, speaker_data_size);
 }
 
-bool AecController::Capture(void *capture_data, std::size_t capture_data_size, void *output_data)
+bool AudioProcessor::Capture(void *capture_data, std::size_t capture_data_size, void *output_data)
 {
     if (output_data == nullptr)
     {
@@ -119,12 +119,146 @@ bool AecController::Capture(void *capture_data, std::size_t capture_data_size, v
     return internalCapture(capture_data, capture_data_size, output_data);
 }
 
-bool AecController::Reset()
+bool AudioProcessor::Reset()
 {
     return internalReset();
 }
 
-webrtc::AudioProcessing* AecController::getAudioProcessor()
+void AudioProcessor::SetEchoCancellation(bool enabled, int32_t suppression_level)
+{
+
+    if (m_audio_processing != nullptr)
+    {
+        m_audio_processing->echo_cancellation()->Enable(enabled);
+
+        if (suppression_level >= static_cast<std::int32_t>(webrtc::EchoCancellation::SuppressionLevel::kLowSuppression)
+                && suppression_level <= static_cast<std::int32_t>(webrtc::EchoCancellation::SuppressionLevel::kHighSuppression))
+        {
+            m_audio_processing->echo_cancellation()->set_suppression_level(static_cast<webrtc::EchoCancellation::SuppressionLevel>(suppression_level));
+        }
+    }
+}
+
+bool AudioProcessor::IsEchoCancellationEnabled() const
+{
+    return m_audio_processing != nullptr && m_audio_processing->echo_cancellation()->is_enabled();
+}
+
+std::uint32_t AudioProcessor::GetEchoSuppressionLevel() const
+{
+
+    if (m_audio_processing != nullptr)
+    {
+        return static_cast<std::int32_t>(m_audio_processing->echo_cancellation()->suppression_level());
+    }
+
+    return -1;
+}
+
+void AudioProcessor::SetNoiseSuppression(bool enabled, int32_t suppression_level)
+{
+    if (m_audio_processing != nullptr)
+    {
+        m_audio_processing->noise_suppression()->Enable(enabled);
+
+        if (suppression_level >= static_cast<std::int32_t>(webrtc::NoiseSuppression::Level::kLow)
+            && suppression_level <= static_cast<std::int32_t>(webrtc::NoiseSuppression::Level::kVeryHigh))
+
+        {
+            m_audio_processing->noise_suppression()->set_level(static_cast<webrtc::NoiseSuppression::Level>(suppression_level));
+        }
+    }
+}
+
+bool AudioProcessor::IsNoiseSuppressionEnabled() const
+{
+    return m_audio_processing != nullptr && m_audio_processing->noise_suppression()->is_enabled();
+}
+
+uint32_t AudioProcessor::GetNoiseSuppressionLevel() const
+{
+    if (m_audio_processing != nullptr)
+    {
+        return static_cast<std::int32_t>(m_audio_processing->noise_suppression()->level());
+    }
+
+    return -1;
+}
+
+void AudioProcessor::SetHighPassFilter(bool enabled)
+{
+    if (m_audio_processing != nullptr)
+    {
+        m_audio_processing->high_pass_filter()->Enable(enabled);
+    }
+}
+
+bool AudioProcessor::IsHighPassFilterEnabled() const
+{
+    return m_audio_processing != nullptr && m_audio_processing->high_pass_filter()->is_enabled();
+}
+
+void AudioProcessor::SetVoiceDetection(bool enabled, std::int32_t likelihood)
+{
+    if (m_audio_processing != nullptr)
+    {
+        m_audio_processing->voice_detection()->Enable(enabled);
+
+        if (likelihood >= static_cast<std::int32_t>(webrtc::VoiceDetection::Likelihood::kVeryLowLikelihood)
+            && likelihood <= static_cast<std::int32_t>(webrtc::VoiceDetection::Likelihood::kHighLikelihood))
+        {
+            m_audio_processing->voice_detection()->set_likelihood(static_cast<webrtc::VoiceDetection::Likelihood>(likelihood));
+        }
+    }
+}
+
+bool AudioProcessor::IsVoiceDetectionEnabled() const
+{
+    return m_audio_processing != nullptr && m_audio_processing->voice_detection()->is_enabled();
+}
+
+bool AudioProcessor::HasVoice() const
+{
+    return m_audio_processing != nullptr &&m_audio_processing->voice_detection()->stream_has_voice();
+}
+
+void AudioProcessor::SetGainControl(bool enabled, int32_t mode)
+{
+    if (m_audio_processing != nullptr)
+    {
+        m_audio_processing->gain_control()->Enable(enabled);
+
+        if (mode >= static_cast<std::int32_t>(webrtc::GainControl::Mode::kAdaptiveAnalog)
+            && mode <= static_cast<std::int32_t>(webrtc::GainControl::Mode::kFixedDigital))
+        {
+            m_audio_processing->gain_control()->set_mode(static_cast<webrtc::GainControl::Mode>(mode));
+
+            if (mode == static_cast<std::int32_t>(webrtc::GainControl::Mode::kAdaptiveAnalog))
+            {
+                m_audio_processing->gain_control()->set_analog_level_limits(0, 255);
+            }
+        }
+    }
+}
+
+bool AudioProcessor::IsGainControlEnabled() const
+{
+    return m_audio_processing != nullptr && m_audio_processing->gain_control()->is_enabled();
+}
+
+int32_t AudioProcessor::GetGainMode() const
+{
+    if (m_audio_processing != nullptr)
+    {
+        return static_cast<std::int32_t>(m_audio_processing->gain_control()->mode());
+    }
+
+    return -1;
+}
+
+
+
+webrtc::AudioProcessing* AudioProcessor::getAudioProcessor()
 {
     if (m_audio_processing == nullptr)
     {
@@ -133,7 +267,7 @@ webrtc::AudioProcessing* AecController::getAudioProcessor()
     return m_audio_processing.get();
 }
 
-bool AecController::init(std::uint32_t sample_rate, std::uint32_t bit_per_sample, std::uint32_t channels)
+bool AudioProcessor::init(std::uint32_t sample_rate, std::uint32_t bit_per_sample, std::uint32_t channels)
 {
     m_sample_rate = sample_rate;
     m_bit_per_sample = bit_per_sample;
@@ -146,7 +280,7 @@ bool AecController::init(std::uint32_t sample_rate, std::uint32_t bit_per_sample
     return getAudioProcessor() != nullptr;
 }
 
-bool AecController::internalReset()
+bool AudioProcessor::internalReset()
 {
     bool result = false;
 
@@ -178,7 +312,7 @@ bool AecController::internalReset()
         else
         {
 
-            m_audio_processing->echo_control_mobile()->Enable(false);
+            /*m_audio_processing->echo_control_mobile()->Enable(false);
 
             m_audio_processing->noise_suppression()->Enable(true);
 
@@ -191,7 +325,7 @@ bool AecController::internalReset()
             m_audio_processing->echo_cancellation()->enable_drift_compensation(false);
             m_audio_processing->echo_cancellation()->set_suppression_level(webrtc::EchoCancellation::SuppressionLevel::kHighSuppression);
 
-            m_audio_processing->echo_cancellation()->Enable(true);
+            m_audio_processing->echo_cancellation()->Enable(true);*/
 
 
             LOG(info) << "Webrtc audio processor initialize success " LOG_END;
@@ -201,7 +335,7 @@ bool AecController::internalReset()
     return result;
 }
 
-bool AecController::internalPlayback(const void *speaker_data, std::size_t speaker_data_size)
+bool AudioProcessor::internalPlayback(const void *speaker_data, std::size_t speaker_data_size)
 {
     bool result = false;
 
@@ -246,7 +380,7 @@ bool AecController::internalPlayback(const void *speaker_data, std::size_t speak
     return result;
 }
 
-bool AecController::internalCapture(void *capture_data, std::size_t capture_data_size, void * output_data)
+bool AudioProcessor::internalCapture(void *capture_data, std::size_t capture_data_size, void * output_data)
 {
     bool result = false;
 

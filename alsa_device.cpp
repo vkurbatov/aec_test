@@ -542,7 +542,6 @@ std::int32_t AlsaDevice::internalWrite(const void *playback_data, std::size_t si
         {
             case -EPIPE:
                 snd_pcm_prepare(m_handle);
-                usleep(2000);
             break;
 
             case -ESTRPIPE:
