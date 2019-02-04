@@ -73,12 +73,9 @@ public:
 
 private:
 
-    std::string                     m_hw_profile;
     std::string                     m_device_name;
 
     snd_pcm_t*                      m_handle;
-
-    device_names_list_t             m_dictionary_devices;
 
 	audio_params_t					m_audio_params;
 
@@ -89,10 +86,10 @@ private:
 
 public:
 
-    AlsaDevice(const std::string& hw_profile = "");
+    AlsaDevice();
     ~AlsaDevice();
 
-    static const device_names_list_t GetDeviceInfo(const std::string& hw_profile = "");
+    static const device_names_list_t GetDeviceList(bool recorder, const std::string& hw_profile = "");
 
 	bool Open(const std::string& device_name, const audio_params_t& audio_params = null_audio_params);
     bool Close();
@@ -109,16 +106,9 @@ public:
     inline void SetVolume(std::uint32_t volume) { m_volume = volume; }
     inline std::uint32_t GetVolume() const { return m_volume; }
 
-    const device_names_list_t GetPlaybackDeviceInfo();
-    const device_names_list_t GetRecorderDeviceInfo();
-
 private:
 
 	std::int32_t setHardwareParams(const audio_params_t& audio_params);
-
-    const device_names_list_t getDeviceInfoByDirection(bool input);
-
-    std::uint32_t updateDictionary(const std::string& hw_profile = "");
 
 	std::int32_t internalRead(void* capture_data, std::size_t size);
 	std::int32_t internalWrite(const void* playback_data, std::size_t size);

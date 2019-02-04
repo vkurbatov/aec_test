@@ -10,12 +10,8 @@ int main()
 
     int i = 0;
 
-	/*
-
-	audio_devices::AlsaDevice audio_device;
-
-	auto device_playback_list = audio_device.GetPlaybackDeviceInfo();
-	auto device_recorder_list = audio_device.GetRecorderDeviceInfo();
+    auto device_playback_list = audio_devices::AlsaDevice::GetDeviceList(false, "plughw");
+    auto device_recorder_list = audio_devices::AlsaDevice::GetDeviceList(true, "plughw");
 
 	std::cout << "ALSA playback list " << device_playback_list.size() << ":" << std::endl;
 
@@ -35,18 +31,23 @@ int main()
 		i++;
 	}
 
-	*/
+
+
+    const std::uint32_t sample_rate = 48000;
+    const std::uint32_t frame_size = sample_rate / 100;
+    const std::uint32_t buffers_count = 2;
+
 
 	audio_devices::AlsaDevice recorder, player;
 
-    audio_devices::audio_params_t player_params(false, { 44100, 16, 1 }, 441 * 2, true);
-    audio_devices::audio_params_t recorder_params(true, { 44100, 16, 1 }, 441 * 2, false);
+    audio_devices::audio_params_t player_params(false, { sample_rate, 16, 1 }, frame_size * 6, true);
+    audio_devices::audio_params_t recorder_params(true, { sample_rate, 16, 1 }, frame_size * 4, false);
 
-    audio_processing::AecController aec_controller(44100, 16, 1);
+    audio_processing::AecController aec_controller(sample_rate, 16, 1);
 
-	player.Open("default", player_params);
+    player.Open(device_playback_list[1].name, player_params);
     player.SetVolume(100);
-	recorder.Open("default", recorder_params);
+    recorder.Open(device_recorder_list[1].name, recorder_params);
     recorder.SetVolume(100);
 
 
@@ -54,42 +55,63 @@ int main()
 
     if (aec_controller.Reset())
     {
+        int i = 0;
+
+        char buffers [buffers_count][frame_size * 2];
+
+        char empty_buffer[frame_size * 2];
+
+        std::memset(empty_buffer, 0, sizeof(empty_buffer));
+
+        std::memset(buffers, 0, sizeof(buffers));
+
+        aec_controller.SetHighPassFilter(true);
+        aec_controller.SetGainControl(true, 0);
+        aec_controller.SetEchoCancellation(true, 0);
+
         while (true)
         {
-            char buffer[441 * 2];
-            std::int16_t buffer2[sizeof(buffer) / sizeof(std::int16_t)];
-
-            for (auto& c : buffer2)
-            {
-                c = 0;// -32768;
-            }
-
             // std::memset(buffer2, -32768, sizeof(buffer2));
 
             auto t_1 = std::chrono::high_resolution_clock::now();
 
-            auto ret = recorder.Read(buffer, sizeof(buffer));
+            auto r_idx = (i + 0) % buffers_count;
+            auto w_idx = (i + 0) % buffers_count;
 
-            // aec_controller.Playback(buffer2, sizeof(buffer));
-            // aec_controller.Capture(buffer, sizeof(buffer));
+            auto& read_buffer = buffers[r_idx];
+            auto& write_buffer = buffers[w_idx];
+
+            auto ret = recorder.Read(read_buffer, sizeof(read_buffer));
+
+            auto aec_t_1 = std::chrono::high_resolution_clock::now();
+
+            aec_controller.Playback(write_buffer, sizeof(write_buffer));
+
+            aec_controller.Capture(read_buffer, sizeof(read_buffer));
+
+            auto aec_1 = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - aec_t_1).count();
+
+            /*if (aec_1 > 0)
+            {
+                std::cout << "AEC delay = " << aec_1 << std::endl;
+            }*/
 
             auto t_2 = std::chrono::high_resolution_clock::now();
 
             if (ret > 0)
             {
-                player.Write(buffer, ret);
+                player.Write(write_buffer, ret);
             }
 
             begin += std::chrono::milliseconds(10);
 
             std::this_thread::sleep_for(begin - std::chrono::high_resolution_clock::now());
 
-
             auto dl_1 = std::chrono::duration_cast<std::chrono::milliseconds>(t_2 - t_1).count();
             auto dl_2 = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - t_2).count();
 
             // std::cout << "Read time = " << dl_1 << ", write time = " << dl_2 << std::endl;
-
+            i++;
         }
     }
 

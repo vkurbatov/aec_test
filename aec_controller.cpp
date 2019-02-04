@@ -24,64 +24,62 @@ namespace converters
 {
 
 template<typename Tval, Tval Tmax = std::numeric_limits<Tval>::max()>
-void pcm_to_float(const void* pcm_frame, std::size_t size, void *float_frame)
+void pcm_to_float(const void* pcm_frame, std::size_t sample_count, float* float_frame)
 {
 
-    for( int i = 0; i < (size / sizeof(Tval)); i++ )
-    {
-        auto& sample = *(static_cast<const Tval*>(pcm_frame) + i);
+    auto pcm_data =  static_cast<const Tval*>(pcm_frame);
 
-        static_cast<float*>(float_frame)[i] = static_cast<float>(sample) / static_cast<float>(Tmax);
+    for( int i = 0; i < sample_count; i++ )
+    {
+        float_frame[i] = static_cast<float>(pcm_data[i]) / static_cast<float>(Tmax);
     }
 }
 
-void pcm_to_float(const void* pcm_frame, std::size_t size, void *float_frame, std::uint32_t bit_per_sample)
+void pcm_to_float(const void* pcm_frame, std::size_t sample_count, float* float_frame, std::uint32_t bit_per_sample)
 {
     switch(bit_per_sample)
     {
         case 8:
-            pcm_to_float<std::int8_t>(pcm_frame, size, float_frame);
+            pcm_to_float<std::int8_t>(pcm_frame, sample_count, float_frame);
             break;
         case 16:
-            pcm_to_float<std::int16_t>(pcm_frame, size, float_frame);
+            pcm_to_float<std::int16_t>(pcm_frame, sample_count, float_frame);
             break;
         case 32:
-            pcm_to_float<std::int32_t>(pcm_frame, size, float_frame);
+            pcm_to_float<std::int32_t>(pcm_frame, sample_count, float_frame);
             break;
         default:
-            throw("Error bit_per_sample parameter: ");
+            throw("Error bit_per_sample parameter");
     }
 }
 
 template<typename Tval, Tval Tmax = std::numeric_limits<Tval>::max()>
-void float_to_pcm(const void* float_frame, std::size_t size, void* pcm_frame)
+void float_to_pcm(const float* float_frame, std::size_t sample_count, void* pcm_frame)
 {
-    std::vector<Tval> result;
+    auto pcm_data =  static_cast<Tval*>(pcm_frame);
 
-    for( int i = 0; i < (size / sizeof(float)); i++ )
+    for( int i = 0; i < sample_count; i++ )
     {
-        auto& sample = *(static_cast<const float*>(float_frame) + i);
-
-        static_cast<Tval*>(pcm_frame)[i] = static_cast<Tval>(sample * static_cast<float>(Tmax));
+        pcm_data[i] = static_cast<Tval>(float_frame[i] * static_cast<float>(Tmax));
     }
 }
 
 
-void float_to_pcm(const float* float_frame, std::size_t size, void* pcm_frame, std::uint32_t bit_per_sample)
+void float_to_pcm(const float* float_frame, std::size_t sample_count, void* pcm_frame, std::uint32_t bit_per_sample)
 {
     switch(bit_per_sample)
     {
         case 8:
-            float_to_pcm<std::int8_t>(float_frame, size, pcm_frame);
+            float_to_pcm<std::int8_t>(float_frame, sample_count, pcm_frame);
             break;
         case 16:
-            float_to_pcm<std::int16_t>(float_frame, size, pcm_frame);
+            float_to_pcm<std::int16_t>(float_frame, sample_count, pcm_frame);
             break;
         case 32:
-            float_to_pcm<std::int32_t>(float_frame, size, pcm_frame);
+            float_to_pcm<std::int32_t>(float_frame, sample_count, pcm_frame);
             break;
         default:
-            throw("Error bit_per_sample parameter: ");
+            throw("Error bit_per_sample parameter");
     }
 }
 
@@ -96,12 +94,15 @@ void webrtc_deletor(T* webrtc_obj)
     }
 }
 
-AecController::AecController(std::uint32_t sample_rate, std::uint32_t bit_per_sample, std::uint32_t channels) :
-    m_audio_processing(nullptr, webrtc_deletor<webrtc::AudioProcessing> ),
-    m_stream_config(nullptr, webrtc_deletor<webrtc::StreamConfig> )
+AecController::AecController(std::uint32_t sample_rate, std::uint32_t bit_per_sample, std::uint32_t channels)
+    : m_audio_processing(nullptr, webrtc_deletor<webrtc::AudioProcessing> )
+    , m_stream_config(nullptr, webrtc_deletor<webrtc::StreamConfig> )
 {
+    channels = 1; // temporarily
+
     init(sample_rate, bit_per_sample, channels);
 }
+
 
 bool AecController::Playback(const void *speaker_data, std::size_t speaker_data_size)
 {
@@ -122,6 +123,140 @@ bool AecController::Reset()
 {
     return internalReset();
 }
+
+void AecController::SetEchoCancellation(bool enabled, int32_t suppression_level)
+{
+
+    if (m_audio_processing != nullptr)
+    {
+        m_audio_processing->echo_cancellation()->Enable(enabled);
+
+        if (suppression_level >= static_cast<std::int32_t>(webrtc::EchoCancellation::SuppressionLevel::kLowSuppression)
+                && suppression_level <= static_cast<std::int32_t>(webrtc::EchoCancellation::SuppressionLevel::kHighSuppression))
+        {
+            m_audio_processing->echo_cancellation()->set_suppression_level(static_cast<webrtc::EchoCancellation::SuppressionLevel>(suppression_level));
+        }
+    }
+}
+
+bool AecController::IsEchoCancellationEnabled() const
+{
+    return m_audio_processing != nullptr && m_audio_processing->echo_cancellation()->is_enabled();
+}
+
+std::uint32_t AecController::GetEchoSuppressionLevel() const
+{
+
+    if (m_audio_processing != nullptr)
+    {
+        return static_cast<std::int32_t>(m_audio_processing->echo_cancellation()->suppression_level());
+    }
+
+    return -1;
+}
+
+void AecController::SetNoiseSuppression(bool enabled, int32_t suppression_level)
+{
+    if (m_audio_processing != nullptr)
+    {
+        m_audio_processing->noise_suppression()->Enable(enabled);
+
+        if (suppression_level >= static_cast<std::int32_t>(webrtc::NoiseSuppression::Level::kLow)
+            && suppression_level <= static_cast<std::int32_t>(webrtc::NoiseSuppression::Level::kVeryHigh))
+
+        {
+            m_audio_processing->noise_suppression()->set_level(static_cast<webrtc::NoiseSuppression::Level>(suppression_level));
+        }
+    }
+}
+
+bool AecController::IsNoiseSuppressionEnabled() const
+{
+    return m_audio_processing != nullptr && m_audio_processing->noise_suppression()->is_enabled();
+}
+
+uint32_t AecController::GetNoiseSuppressionLevel() const
+{
+    if (m_audio_processing != nullptr)
+    {
+        return static_cast<std::int32_t>(m_audio_processing->noise_suppression()->level());
+    }
+
+    return -1;
+}
+
+void AecController::SetHighPassFilter(bool enabled)
+{
+    if (m_audio_processing != nullptr)
+    {
+        m_audio_processing->high_pass_filter()->Enable(enabled);
+    }
+}
+
+bool AecController::IsHighPassFilterEnabled() const
+{
+    return m_audio_processing != nullptr && m_audio_processing->high_pass_filter()->is_enabled();
+}
+
+void AecController::SetVoiceDetection(bool enabled, std::int32_t likelihood)
+{
+    if (m_audio_processing != nullptr)
+    {
+        m_audio_processing->voice_detection()->Enable(enabled);
+
+        if (likelihood >= static_cast<std::int32_t>(webrtc::VoiceDetection::Likelihood::kVeryLowLikelihood)
+            && likelihood <= static_cast<std::int32_t>(webrtc::VoiceDetection::Likelihood::kHighLikelihood))
+        {
+            m_audio_processing->voice_detection()->set_likelihood(static_cast<webrtc::VoiceDetection::Likelihood>(likelihood));
+        }
+    }
+}
+
+bool AecController::IsVoiceDetectionEnabled() const
+{
+    return m_audio_processing != nullptr && m_audio_processing->voice_detection()->is_enabled();
+}
+
+bool AecController::HasVoice() const
+{
+    return m_audio_processing != nullptr &&m_audio_processing->voice_detection()->stream_has_voice();
+}
+
+void AecController::SetGainControl(bool enabled, int32_t mode)
+{
+    if (m_audio_processing != nullptr)
+    {
+        m_audio_processing->gain_control()->Enable(enabled);
+
+        if (mode >= static_cast<std::int32_t>(webrtc::GainControl::Mode::kAdaptiveAnalog)
+            && mode <= static_cast<std::int32_t>(webrtc::GainControl::Mode::kFixedDigital))
+        {
+            m_audio_processing->gain_control()->set_mode(static_cast<webrtc::GainControl::Mode>(mode));
+
+            if (mode == static_cast<std::int32_t>(webrtc::GainControl::Mode::kAdaptiveAnalog))
+            {
+                m_audio_processing->gain_control()->set_analog_level_limits(0, 255);
+            }
+        }
+    }
+}
+
+bool AecController::IsGainControlEnabled() const
+{
+    return m_audio_processing != nullptr && m_audio_processing->gain_control()->is_enabled();
+}
+
+int32_t AecController::GetGainMode() const
+{
+    if (m_audio_processing != nullptr)
+    {
+        return static_cast<std::int32_t>(m_audio_processing->gain_control()->mode());
+    }
+
+    return -1;
+}
+
+
 
 webrtc::AudioProcessing* AecController::getAudioProcessor()
 {
@@ -176,20 +311,6 @@ bool AecController::internalReset()
         }
         else
         {
-            m_audio_processing->echo_control_mobile()->Enable(false);
-
-            m_audio_processing->noise_suppression()->Enable(false);
-
-            m_audio_processing->high_pass_filter()->Enable(false);
-
-            m_audio_processing->gain_control()->Enable(false);
-
-            m_audio_processing->voice_detection()->Enable(false);
-
-            //m_audio_processing->echo_cancellation()->set_stream_drift_samples(441);
-            m_audio_processing->echo_cancellation()->enable_drift_compensation(false);
-            m_audio_processing->echo_cancellation()->Enable(true);
-
             LOG(info) << "Webrtc audio processor initialize success " LOG_END;
         }
     }
@@ -208,20 +329,18 @@ bool AecController::internalPlayback(const void *speaker_data, std::size_t speak
 
         auto speaker_ptr = static_cast<const std::uint8_t*>(speaker_data);
 
-        std::vector<float> float_buffer((m_step_size * 8) / m_bit_per_sample);
+        auto sample_count = (m_step_size * 8) / m_bit_per_sample;
+
+        std::vector<float> float_buffer(sample_count);
 
         while(speaker_data_size >= m_step_size)
         {
 
-            converters::pcm_to_float(speaker_ptr, m_step_size, float_buffer.data(), m_bit_per_sample);
+            converters::pcm_to_float(speaker_ptr, sample_count , float_buffer.data(), m_bit_per_sample);
 
             auto samples = float_buffer.data();
 
-            auto webrtc_status = apm->AnalyzeReverseStream(&samples, m_step_size / 2, m_sample_rate, webrtc::AudioProcessing::ChannelLayout::kMono);
-
-            //auto webrtc_status = apm->ProcessReverseStream(&samples, *m_stream_config, *m_stream_config, &samples);
-
-            // auto webrtc_status = webrtc::AudioProcessing::kNoError;
+            auto webrtc_status = apm->ProcessReverseStream(&samples, *m_stream_config, *m_stream_config, &samples);
 
             result = webrtc_status == webrtc::AudioProcessing::kNoError;
 
@@ -256,20 +375,19 @@ bool AecController::internalCapture(void *capture_data, std::size_t capture_data
         auto capturt_ptr = static_cast<std::uint8_t*>(capture_data);
         auto output_ptr = static_cast<std::uint8_t*>(output_data);
 
-        std::vector<float> float_buffer((m_step_size * 8) / m_bit_per_sample);
+        auto sample_count = (m_step_size * 8) / m_bit_per_sample;
 
+        std::vector<float> float_buffer(sample_count);
 
         while(capture_data_size >= m_step_size)
         {
-            converters::pcm_to_float(capturt_ptr, m_step_size, float_buffer.data(), m_bit_per_sample);
+            converters::pcm_to_float(capturt_ptr, sample_count, float_buffer.data(), m_bit_per_sample);
 
             auto samples = float_buffer.data();
 
             apm->set_stream_delay_ms(0);
 
             auto webrtc_status = apm->ProcessStream(&samples, *m_stream_config, *m_stream_config, &samples);
-
-            // auto webrtc_status = webrtc::AudioProcessing::kNoError;
 
             result = webrtc_status == webrtc::AudioProcessing::kNoError;
 
@@ -280,7 +398,7 @@ bool AecController::internalCapture(void *capture_data, std::size_t capture_data
             }
             else
             {
-                converters::float_to_pcm(float_buffer.data(), m_step_size, output_ptr, m_bit_per_sample);
+                converters::float_to_pcm(float_buffer.data(), sample_count, output_ptr, m_bit_per_sample);
             }
 
             capture_data_size -= m_step_size;

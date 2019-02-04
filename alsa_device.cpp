@@ -102,9 +102,8 @@ void change_volume(const void *sound_data, std::size_t size, void* output_data, 
 }
 }
 
-AlsaDevice::AlsaDevice(const std::string& hw_profile)
+AlsaDevice::AlsaDevice()
 		: m_handle(nullptr)
-		, m_hw_profile(hw_profile.empty() ? default_hw_profile : hw_profile)
         , m_device_name("default")
         , m_volume(100)
 {
@@ -116,7 +115,7 @@ AlsaDevice::~AlsaDevice()
 	Close();
 }
 
-const AlsaDevice::device_names_list_t AlsaDevice::GetDeviceInfo(const std::string &hw_profile)
+const AlsaDevice::device_names_list_t AlsaDevice::GetDeviceList(bool recorder, const std::string &hw_profile)
 {
 	char ** hints = nullptr;
 
@@ -183,7 +182,7 @@ const AlsaDevice::device_names_list_t AlsaDevice::GetDeviceInfo(const std::strin
 
 								device_info.input = field_value.empty() || field_value == "Input";
 								device_info.output = field_value.empty() || field_value == "Output";
-								append = device_info.input || device_info.output;
+                                append = recorder ? device_info.input : device_info.output;
 						}
 
 					}
@@ -336,16 +335,6 @@ std::int32_t AlsaDevice::Write(const void *playback_data, std::size_t size)
 	return result;
 }
 
-const AlsaDevice::device_names_list_t AlsaDevice::GetPlaybackDeviceInfo()
-{
-    return std::move(getDeviceInfoByDirection(false));
-}
-
-const AlsaDevice::device_names_list_t AlsaDevice::GetRecorderDeviceInfo()
-{
-    return std::move(getDeviceInfoByDirection(true));
-}
-
 std::int32_t AlsaDevice::setHardwareParams(const audio_params_t& audio_params)
 {
 	std::int32_t result = -EINVAL;
@@ -450,25 +439,6 @@ std::int32_t AlsaDevice::setHardwareParams(const audio_params_t& audio_params)
 
     return result;
 }
-
-const AlsaDevice::device_names_list_t AlsaDevice::getDeviceInfoByDirection(bool input)
-{
-	updateDictionary(m_hw_profile);
-
-	device_names_list_t playback_device_list;
-
-	std::copy_if(m_dictionary_devices.begin(), m_dictionary_devices.end(), std::back_inserter(playback_device_list), [input](audio_device_info& info) { return input ? info.input : info.output; } );
-
-	return std::move(playback_device_list);
-}
-
-std::uint32_t AlsaDevice::updateDictionary(const std::string& hw_profile)
-{
-	m_dictionary_devices = AlsaDevice::GetDeviceInfo(hw_profile);
-	return m_dictionary_devices.size();
-}
-
-
 
 std::int32_t AlsaDevice::internalRead(void *capture_data, std::size_t size)
 {
