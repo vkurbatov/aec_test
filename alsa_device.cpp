@@ -542,6 +542,7 @@ std::int32_t AlsaDevice::internalWrite(const void *playback_data, std::size_t si
         {
             case -EPIPE:
                 snd_pcm_prepare(m_handle);
+                usleep(2000);
             break;
 
             case -ESTRPIPE:
@@ -553,10 +554,6 @@ std::int32_t AlsaDevice::internalWrite(const void *playback_data, std::size_t si
                 if ( snd_pcm_wait( m_handle, m_audio_params.audio_format.duration_ms(size) ) != 1 )
                 {
                     io_complete = true;
-                }
-                else
-                {
-                    snd_pcm_prepare(m_handle);
                 }
 
             break;
@@ -606,28 +603,5 @@ std::int32_t AlsaDevice::internalWrite(const void *playback_data, std::size_t si
     return result;
 }
 
-std::int32_t AlsaDevice::internalVolume(int32_t volume)
-{
-    bool is_set = volume >= 0;
-
-    snd_mixer_t *mixer_handle;
-    snd_mixer_selem_id_t *selem_id;
-
-    const char* selem_name = m_audio_params.recorder ? "Mic" : "Master";
-
-    snd_mixer_open(&mixer_handle, 0);
-    snd_mixer_attach(mixer_handle, m_device_name.c_str());
-    snd_mixer_selem_register(mixer_handle, NULL, NULL);
-    snd_mixer_load(mixer_handle);
-
-    snd_mixer_selem_id_alloca(&selem_id);
-    snd_mixer_selem_id_set_index(selem_id, 0);
-    snd_mixer_selem_id_set_name(selem_id, selem_name);
-
-    auto elem = snd_mixer_find_selem(mixer_handle, selem_id);
-
-
-
-}
 
 }

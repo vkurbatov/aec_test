@@ -114,8 +114,6 @@ private:
 	std::int32_t internalRead(void* capture_data, std::size_t size);
 	std::int32_t internalWrite(const void* playback_data, std::size_t size);
 
-    std::int32_t internalVolume(std::int32_t volume = -1);
-
 };
 
 }
