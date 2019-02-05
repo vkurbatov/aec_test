@@ -45,9 +45,9 @@ int main()
 
     audio_processing::AecController aec_controller(sample_rate, 16, 1);
 
-    player.Open(device_playback_list[1].name, player_params);
+    player.Open(device_playback_list[0].name, player_params);
     player.SetVolume(100);
-    recorder.Open(device_recorder_list[1].name, recorder_params);
+    recorder.Open(device_recorder_list[0].name, recorder_params);
     recorder.SetVolume(100);
 
 
@@ -67,7 +67,7 @@ int main()
 
         aec_controller.SetHighPassFilter(true);
         aec_controller.SetGainControl(true, 0);
-        aec_controller.SetEchoCancellation(true, 0);
+        aec_controller.SetEchoCancellation(true, 2);
 
         while (true)
         {
@@ -86,6 +86,8 @@ int main()
             auto aec_t_1 = std::chrono::high_resolution_clock::now();
 
             aec_controller.Playback(write_buffer, sizeof(write_buffer));
+
+            // if (i > 0)
 
             aec_controller.Capture(read_buffer, sizeof(read_buffer));
 

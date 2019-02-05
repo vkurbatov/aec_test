@@ -2,6 +2,7 @@
 #define AEC_CONTROLLER_H
 
 #ifndef WEBRTC_MODULES_AUDIO_PROCESSING_INCLUDE_AUDIO_PROCESSING_H_
+
 namespace webrtc
 {
 class AudioProcessing;
